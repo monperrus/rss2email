@@ -449,21 +449,12 @@ class Feed (object):
             raise
 
     def _process_entry(self, parsed, entry):
-        id_ = self._get_entry_id(entry)
-        # If .trust_guid isn't set, we get back hashes of the content.
-        # Instead of letting these run wild, we put them in context
-        # by associating them with the actual ID (if it exists).
-        guid = entry.get('id', id_)
-        if isinstance(guid, dict):
-            guid = guid.values()[0]
-        # In some bad RSS feeds, id is present but empty...
-        if guid == '':
-            guid = id_
+        # get_entry_id is the unique method that encapsulates where the strategy for getting the id is set
+        guid = self._get_entry_id(entry)
         if guid in self.seen:
-            if self.seen[guid]['id'] == id_:
-                _LOG.debug('already seen {}'.format(id_))
-                return  # already seen
-        _LOG.debug('not seen {}'.format(id_))
+            _LOG.debug('already seen {}'.format(guid))
+            return  # already seen
+        _LOG.debug('not seen {}'.format(guid))
         sender = self._get_entry_email(parsed=parsed, entry=entry)
         subject = self._get_entry_title(entry)
         extra_headers = _collections.OrderedDict((
@@ -471,7 +462,7 @@ class Feed (object):
                 ('Message-ID', '<{}@dev.null.invalid>'.format(_uuid.uuid4())),
                 ('User-Agent', _USER_AGENT),
                 ('X-RSS-Feed', self.url),
-                ('X-RSS-ID', id_),
+                ('X-RSS-ID', guid),
                 ('X-RSS-URL', self._get_entry_link(entry)),
                 ('X-RSS-TAGS', self._get_entry_tags(entry)),
                 ))
@@ -505,56 +496,7 @@ class Feed (object):
             extra_headers=extra_headers,
             config=self.config,
             section=self.section)
-        return (guid, id_, sender, message)
-
-    def _get_entry_id(self, entry):
-        """Get best ID from an entry."""
-        if self.trust_link:
-            return entry.get('link', None)
-        if self.trust_guid:
-            if getattr(entry, 'id', None):
-                # Newer versions of feedparser could return a dictionary
-                if isinstance(entry.id, dict):
-                    return entry.id.values()[0]
-                return entry.id
-        content = self._get_entry_content(entry)
-        content_value = content['value'].strip()
-        if content_value:
-            return _hashlib.sha1(
-                content_value.encode('unicode-escape')).hexdigest()
-        elif getattr(entry, 'link', None):
-            return _hashlib.sha1(
-                entry.link.encode('unicode-escape')).hexdigest()
-        elif getattr(entry, 'title', None):
-            return _hashlib.sha1(
-                entry.title.encode('unicode-escape')).hexdigest()
-
-    def _get_entry_link(self, entry):
-        return entry.get('link', None)
-
-    def _get_entry_title(self, entry):
-        if hasattr(entry, 'title_detail') and entry.title_detail:
-            title = entry.title_detail.value
-            if 'html' in entry.title_detail.type:
-                title = self._html2text(title, default=title)
-        else:
-            content = self._get_entry_content(entry)
-            value = content['value']
-            if content['type'] in ('text/html', 'application/xhtml+xml'):
-                value = self._html2text(value, default=value)
-            title = value[:70]
-        title = title.replace('\n', ' ').strip()
-        return title
-
-    def _get_entry_date(self, entry):
-        datetime = _time.gmtime()
-        if self.date_header:
-            for datetype in self.date_header_order:
-                kind = datetype + '_parsed'
-                if entry.get(kind, None):
-                    datetime = entry[kind]
-                    break
-        return _time.strftime("%a, %d %b %Y %H:%M:%S -0000", datetime)
+        return (guid, guid, sender, message)
 
     def _get_entry_name(self, parsed, entry):
         """Get the best name
