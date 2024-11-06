@@ -35,6 +35,13 @@ import rss2email.config as _rss2email_config
 import rss2email.feed as _rss2email_feed
 from rss2email.feeds import UNIX
 
+import doctest
+
+def load_tests(loader, tests, ignore):
+    print(doctest.DocTestSuite(_rss2email))
+    tests.addTests(doctest.DocTestSuite(_rss2email.feed))
+    return tests
+    
 # This metaclass lets us generate the tests for each feed directory
 # separately. This lets us see which tests are being run more clearly than
 # if we had one big test that ran everything.
