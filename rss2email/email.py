@@ -55,6 +55,7 @@ import subprocess as _subprocess
 import sys as _sys
 import time as _time
 import os as _os
+import hashlib
 
 import html2text
 
@@ -167,6 +168,7 @@ def get_message(sender, recipient, subject, body, content_type,
     message['From'] = sender
     message['To'] = ', '.join(recipient_list)
     message['Subject'] = _Header(subject, subject_encoding)
+    message['References'] = hashlib.sha256(sender.encode('utf8')).hexdigest()
     if config.getboolean(section, 'use-8bit'):
         del message['Content-Transfer-Encoding']
         charset = _Charset(body_encoding)
@@ -222,7 +224,11 @@ def smtp_send(recipient, message, config=None, section='DEFAULT'):
         except Exception as e:
             raise _error.SMTPAuthenticationError(
                 server=server, username=username)
-    smtp.send_message(message, config.get(section, 'from'), recipient.split(','))
+    try:
+      smtp.send_message(message, username, recipient.split(','))
+    except Exception as e: 
+      if "Phishing" not in str(e): print(e)
+
     smtp.quit()
 
 def imap_send(message, config=None, section='DEFAULT'):

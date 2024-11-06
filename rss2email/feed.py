@@ -59,6 +59,7 @@ from email.mime.multipart import MIMEMultipart as _MIMEMultipart
 from email.utils import formataddr as _formataddr
 from email.utils import formatdate as _formatdate
 from email.utils import parseaddr as _parseaddr
+import quopri
 import hashlib as _hashlib
 import html.parser as _html_parser
 import re as _re
@@ -458,8 +459,8 @@ class Feed (object):
             warned = True
         elif (parsed.bozo and
               isinstance(exc, _feedparser.CharacterEncodingOverride)):
-            _LOG.warning(
-                'incorrectly declared encoding: {}: {}'.format(exc, self))
+            #_LOG.warning(
+            #    'incorrectly declared encoding: {}: {}'.format(exc, self))
             warned = True
         elif (parsed.bozo and isinstance(exc, _feedparser.NonXMLContentType)):
             _LOG.warning('non XML Content-Type: {}: {}'.format(exc, self))
@@ -543,6 +544,8 @@ class Feed (object):
         try:
             content = self._process_entry_content(
                 entry=entry, content=content, subject=subject)
+            name = self._get_entry_name(parsed=parsed, entry=entry, name_format='{author}')
+            content['value'] = content['value'] + "\n" + name
         except _error.ProcessingError as e:
             e.parsed = parsed
             raise
@@ -618,7 +621,7 @@ class Feed (object):
                     break
         return _formatdate(_calendar.timegm(datetime))
 
-    def _get_entry_name(self, parsed, entry):
+    def _get_entry_name(self, parsed, entry, name_format='{feed-title}'):
         """Get the best name
 
         >>> import feedparser
@@ -661,13 +664,16 @@ class Feed (object):
         feed = parsed.feed
         data['feed-title'] = feed.get('title', '')
         for x in [entry, feed]:
+            if x.get('authors', []):
+                    data['author'] = ", ".join([y.name for y in x.authors])
+                    break
             if 'name' in x.get('author_detail', []):
                 if x.author_detail.name:
                     data['author'] = x.author_detail.name
                     break
         if 'name' in feed.get('publisher_detail', []):
             data['publisher'] = feed.publisher_detail.name
-        name = self.name_format.format(**data)
+        name = name_format.format(**data)
         name = name.replace('\n', ' ').strip()
         return _html.unescape(name)
 
@@ -730,8 +736,12 @@ class Feed (object):
         """Get the best From email address ('John <jdoe@a.com>')
         """
         name = self._get_entry_name(parsed=parsed, entry=entry)
+        # martin tried additional encdoing, seems to break
+        # formataddr below already encode
+        # name = "=?utf-8?q?" + quopri.encodestring(name.encode('utf-8')).decode("utf-8") + "?="
         address = self._get_entry_address(parsed=parsed, entry=entry)
-        return _formataddr((name, address))
+        name = name+" "+ address.replace("@monperrus.net","")
+        return _formataddr((name, "postmaster@monperrus.net"))
 
     def _get_entry_tags(self, entry):
         """Add post tags, if available
@@ -829,6 +839,7 @@ class Feed (object):
             # (header, footer) they were used as ids, not classes,
             # which was inconsistent as well as problemmatic
             # in the config file (# is a comment character).
+            
             lines.extend([
                     '</head>',
                     '<body dir="auto">',
@@ -846,16 +857,21 @@ class Feed (object):
             lines.append('<div class="footer">')
             if link:
                 lines.append(
-                    '<p>URL: <a href="{0}">{0}</a></p>'.format(
-                        _saxutils.escape(link)))
+                    '{}<br/><a href="{}">{}</a>&nbsp;(<a href="{}">feed</a>)<br/>'.format(
+                        _saxutils.escape(subject), 
+                        link, link, 
+                        self.url))
+                #lines.append(
+                    #'<p>URL: <a href="{0}">{0}</a></p>'.format(
+                        #_saxutils.escape(link)))
             for enclosure in getattr(entry, 'enclosures', []):
                 if getattr(enclosure, 'url', None):
                     lines.append(
-                        '<p>Enclosure: <a href="{0}">{0}</a></p>'.format(
+                        '<p>Enclosure: <a href="{0}">enclosure</a></p>'.format(
                             _saxutils.escape(enclosure.url)))
                 if getattr(enclosure, 'src', None):
                     lines.append(
-                        '<p>Enclosure: <a href="{0}">{0}</a></p>'.format(
+                        '<p>Enclosure: <a href="{0}">enclosure</a></p>'.format(
                             _saxutils.escape(enclosure.src)))
                     lines.append(
                         '<p><img src="{}" /></p>'.format(_saxutils.escape(enclosure.src)))
