@@ -665,7 +665,8 @@ class Feed (object):
         data['feed-title'] = feed.get('title', '')
         for x in [entry, feed]:
             if x.get('authors', []):
-                    data['author'] = ", ".join([y.name for y in x.authors])
+                    try: data['author'] = ", ".join([y.name for y in x.authors])
+                    except: data['author'] = ""
                     break
             if 'name' in x.get('author_detail', []):
                 if x.author_detail.name:
@@ -857,7 +858,7 @@ class Feed (object):
             lines.append('<div class="footer">')
             if link:
                 lines.append(
-                    '{}<br/><a href="{}">{}</a>&nbsp;(<a href="{}">feed</a>)<br/>'.format(
+                    '{}<br/>&nbsp;<a href="{}">{}</a>&nbsp;(<a href="{}">feed</a>)<br/>'.format(
                         _saxutils.escape(subject), 
                         link, link, 
                         self.url))
